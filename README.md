@@ -37,6 +37,26 @@ Eagle Wi-Fi Audit capture passivement les trames beacon Wi-Fi via un **WLANPi** 
 
 ---
 
+## ⚠️ Sécurité & Usage légal
+
+> **Cet outil est réservé aux audits Wi-Fi autorisés.**
+
+Eagle Wi-Fi Audit opère en **mode passif uniquement** — il écoute les trames beacon diffusées publiquement par les points d'accès sans s'y associer, sans injecter de trafic et sans modifier la configuration réseau.
+
+**Utilisation autorisée :**
+- Audits de posture Wi-Fi commandés par le propriétaire du réseau
+- Tests de pénétration Wi-Fi avec autorisation écrite
+- Formations et démonstrations en environnement de laboratoire
+
+**Utilisation interdite :**
+- Audit d'un réseau sans autorisation explicite du propriétaire
+- Collecte passive dans un lieu public à des fins de surveillance
+- Toute utilisation contrevenant aux lois locales sur l'interception des communications
+
+Au Canada, la collecte de données Wi-Fi est encadrée par la **Loi sur la protection des renseignements personnels et les documents électroniques (LPRPDE)** et le **Code criminel (art. 184)**. L'utilisateur est seul responsable du respect des lois applicables dans sa juridiction.
+
+---
+
 ## Prérequis
 
 ### Matériel
