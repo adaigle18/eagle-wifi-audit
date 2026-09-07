@@ -1,5 +1,7 @@
 # Eagle Wi-Fi Audit
 
+🇫🇷 Français | [🇬🇧 English](README.en.md)
+
 Application web d'audit de posture Wi-Fi passif pour les professionnels réseaux.  
 Développée par **Alain Daigle, CWNE #332** — [Réseaux Eagle Inc.](https://reseauxeagle.ca)
 
