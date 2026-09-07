@@ -733,11 +733,12 @@ def _add_key_strength_section(doc: Document):
     # Tableau 2 : résistance par longueur de PSK
     _add_heading(doc, 'Résistance estimée selon longueur du PSK (WPA2-Personnel)', level=2)
     psk_data = [
-        ('8 caractères',  'alphanumérique',  '< 3 jours',       'À proscrire absolument.'),
-        ('10 caractères', 'alphanumérique',  '2 mois – 2 ans',  'Insuffisant pour données sensibles.'),
-        ('12 caractères', 'complexe',        '10 – 200 ans',    'Minimum recommandé avec WPA2.'),
-        ('16 caractères', 'complexe',        'Astronomique',    'Recommandé — migrer vers WPA3 dès possible.'),
-        ('20+ caractères','aléatoire',       'Impraticable',    'Idéal en attendant WPA3-SAE.'),
+        ('8 caractères',  'mot du dictionnaire', '< 1 minute',      'Craquable instantanément par attaque dictionnaire (ex: hashcat rockyou.txt). À proscrire.'),
+        ('8 caractères',  'alphanumérique',       '< 3 jours',       'Insuffisant — force brute GPU possible en moins de 72 h. À proscrire absolument.'),
+        ('10 caractères', 'alphanumérique',       '2 mois – 2 ans',  'Insuffisant pour données sensibles.'),
+        ('12 caractères', 'complexe',             '10 – 200 ans',    'Minimum recommandé avec WPA2.'),
+        ('16 caractères', 'complexe',             'Astronomique',    'Recommandé — migrer vers WPA3 dès possible.'),
+        ('20+ caractères','aléatoire',            'Impraticable',    'Idéal en attendant WPA3-SAE.'),
     ]
 
     headers2 = ['Longueur PSK', 'Complexité', 'Temps de crack estimé', 'Recommandation']

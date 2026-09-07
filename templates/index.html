@@ -1032,12 +1032,21 @@
   function openReportModal() {
     // Date par défaut = aujourd'hui
     const today = new Date().toISOString().slice(0, 10);
-    document.getElementById('rpt-date').value = today;
-    document.getElementById('modal-report').classList.add('visible');
+    const dateEl = document.getElementById('rpt-date');
+    const modalEl = document.getElementById('modal-report');
+    if (!dateEl || !modalEl) {
+      alert('Erreur: éléments du modal introuvables.');
+      return;
+    }
+    dateEl.value = today;
+    modalEl.classList.add('visible');
+    modalEl.style.display = 'flex';   // fallback explicite pour Safari
   }
 
   function closeReportModal() {
-    document.getElementById('modal-report').classList.remove('visible');
+    const modalEl = document.getElementById('modal-report');
+    modalEl.classList.remove('visible');
+    modalEl.style.display = '';   // fallback explicite pour Safari
   }
 
   async function generateReport() {
