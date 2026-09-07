@@ -9,6 +9,12 @@ Développée par **Alain Daigle, CWNE #332** — [Réseaux Eagle Inc.](https://r
 
 ---
 
+## Interface
+
+![Eagle Wi-Fi Audit — Interface principale](docs/screenshot.png)
+
+---
+
 ## Aperçu
 
 Eagle Wi-Fi Audit capture passivement les trames beacon Wi-Fi via un **WLANPi** connecté en USB, les classifie selon 5 niveaux de risque, et génère un rapport Word professionnel prêt à remettre au client.
