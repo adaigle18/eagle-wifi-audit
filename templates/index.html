@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eagle Wi-Fi Audit</title>
+  <style>
+    /* ============================================================
+       RESET & BASE
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #1a1a2e;
+      --bg2:         #16213e;
+      --bg3:         #0f3460;
+      --card-bg:     #1e2a4a;
+      --border:      #2a3a5c;
+      --text:        #e0e6f0;
+      --text-dim:    #8899bb;
+      --accent:      #e94560;
+
+      --critique:    #c02020;
+      --critique-bg: rgba(192, 32, 32, 0.15);
+      --eleve:       #e07000;
+      --eleve-bg:    rgba(224, 112, 0, 0.15);
+      --moyen:       #2060a0;
+      --moyen-bg:    rgba(32, 96, 160, 0.15);
+      --bon:         #208040;
+      --bon-bg:      rgba(32, 128, 64, 0.15);
+      --excellent:   #106020;
+      --excellent-bg:rgba(16, 96, 32, 0.15);
+
+      --wps-red:     #e94560;
+      --pmf-green:   #20c060;
+      --pmf-yellow:  #e0c000;
+      --pmf-red:     #c04040;
+
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --mono: 'Courier New', monospace;
+      --radius: 8px;
+      --shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ============================================================
+       HEADER
+    ============================================================ */
+    header {
+      background: var(--bg2);
+      border-bottom: 2px solid var(--accent);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    }
+
+    .header-brand {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .header-brand h1 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+
+    .header-brand h1 span {
+      color: var(--accent);
+    }
+
+    .header-brand p {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 0.78rem;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.connected    { background: #20c060; box-shadow: 0 0 6px #20c060; }
+    .status-dot.disconnected { background: #e94560; box-shadow: 0 0 6px #e94560; animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.5; }
+    }
+
+    .header-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* ============================================================
+       BOUTONS
+    ============================================================ */
+    .btn {
+      cursor: pointer;
+      border: none;
+      border-radius: var(--radius);
+      padding: 8px 16px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-family: var(--font);
+      transition: opacity .15s, transform .1s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:hover  { opacity: 0.88; }
+
+    .btn-primary  { background: var(--accent); color: #fff; }
+    .btn-secondary{ background: var(--bg3);    color: var(--text); border: 1px solid var(--border); }
+    .btn-success  { background: #208040;        color: #fff; }
+    .btn-sm       { padding: 5px 11px; font-size: 0.76rem; }
+
+    /* ============================================================
+       MAIN LAYOUT
+    ============================================================ */
+    main {
+      flex: 1;
+      padding: 20px 24px;
+      max-width: 1600px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* ============================================================
+       CARDS DE SYNTHÈSE
+    ============================================================ */
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .summary-cards { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .summary-cards { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .risk-card {
+      background: var(--card-bg);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 12px;
+      cursor: pointer;
+      transition: transform .15s, border-color .15s, box-shadow .15s;
+      text-align: center;
+      user-select: none;
+    }
+
+    .risk-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow);
+    }
+
+    .risk-card.active {
+      box-shadow: 0 0 0 3px currentColor;
+    }
+
+    .risk-card[data-level="CRITIQUE"] { color: var(--critique); border-color: var(--critique); }
+    .risk-card[data-level="ÉLEVÉ"]    { color: var(--eleve);    border-color: var(--eleve); }
+    .risk-card[data-level="MOYEN"]    { color: var(--moyen);    border-color: var(--moyen); }
+    .risk-card[data-level="BON"]      { color: var(--bon);      border-color: var(--bon); }
+    .risk-card[data-level="EXCELLENT"]{ color: var(--excellent);border-color: var(--excellent); }
+
+    .risk-card[data-level="CRITIQUE"].active { background: var(--critique-bg); }
+    .risk-card[data-level="ÉLEVÉ"].active    { background: var(--eleve-bg); }
+    .risk-card[data-level="MOYEN"].active    { background: var(--moyen-bg); }
+    .risk-card[data-level="BON"].active      { background: var(--bon-bg); }
+    .risk-card[data-level="EXCELLENT"].active{ background: var(--excellent-bg); }
+
+    .risk-card .card-count {
+      font-size: 2.2rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .risk-card .card-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.9;
+    }
+
+    .risk-card .card-hint {
+      font-size: 0.63rem;
+      opacity: 0.55;
+      margin-top: 3px;
+    }
+
+    /* ============================================================
+       TOOLBAR DU TABLEAU
+    ============================================================ */
+    .table-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .table-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .table-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .filter-chip {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 3px 10px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: background .15s;
+    }
+    .filter-chip:hover { background: var(--border); }
+    .filter-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ============================================================
+       TABLEAU
+    ============================================================ */
+    .table-wrapper {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: auto;
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    thead th {
+      background: var(--bg3);
+      color: var(--text);
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 0.73rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      white-space: nowrap;
+      user-select: none;
+      border-bottom: 2px solid var(--border);
+      position: sticky;
+      top: 0;
+    }
+
+    thead th:hover { background: var(--border); }
+
+    thead th.sorted-asc::after  { content: ' ▲'; font-size: 0.65em; opacity: 0.7; }
+    thead th.sorted-desc::after { content: ' ▼'; font-size: 0.65em; opacity: 0.7; }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background .1s;
+    }
+
+    tbody tr:hover { background: rgba(255,255,255,0.04); }
+    tbody tr:last-child { border-bottom: none; }
+
+    td {
+      padding: 9px 12px;
+      vertical-align: middle;
+    }
+
+    .td-risk {
+      font-weight: 700;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      border-radius: 4px;
+      padding: 4px 8px;
+      text-align: center;
+    }
+
+    .risk-CRITIQUE { background: rgba(192,32,32,0.25); color: #ff6060; }
+    .risk-ÉLEVÉ    { background: rgba(224,112,0,0.25);  color: #ffaa44; }
+    .risk-MOYEN    { background: rgba(32,96,160,0.25);  color: #66aaff; }
+    .risk-BON      { background: rgba(32,128,64,0.25);  color: #60dd88; }
+    .risk-EXCELLENT{ background: rgba(16,96,32,0.25);   color: #40ff80; }
+
+    .td-ssid {
+      font-weight: 600;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .td-ssid.hidden-ssid { color: var(--text-dim); font-style: italic; }
+
+    .td-auth { font-size: 0.78rem; white-space: nowrap; }
+
+    .badge {
+      display: inline-block;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .badge-wps   { background: var(--wps-red);    color: #fff; }
+    .badge-pmf-r { background: var(--pmf-green);  color: #fff; }
+    .badge-pmf-o { background: var(--pmf-yellow); color: #000; }
+    .badge-pmf-d { background: var(--pmf-red);    color: #fff; }
+
+    .td-rssi { font-family: var(--mono); font-size: 0.78rem; white-space: nowrap; }
+    .rssi-good    { color: #20c060; }
+    .rssi-ok      { color: #a0d060; }
+    .rssi-medium  { color: #e0c000; }
+    .rssi-low     { color: #e07000; }
+    .rssi-very-low{ color: #c03030; }
+
+    .td-constat {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      max-width: 260px;
+      line-height: 1.35;
+    }
+
+    .td-vendor { font-size: 0.76rem; white-space: nowrap; }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-dim);
+    }
+
+    .empty-state .big-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.4; }
+    .empty-state p { font-size: 0.88rem; }
+
+    /* ============================================================
+       MODAL
+    ============================================================ */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.visible { display: flex; }
+
+    .modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    }
+
+    .modal h2 {
+      font-size: 1.05rem;
+      margin-bottom: 20px;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .form-group input, .form-group textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 0.88rem;
+      font-family: var(--font);
+      outline: none;
+      transition: border-color .15s;
+    }
+    .form-group input:focus, .form-group textarea:focus {
+      border-color: var(--accent);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    /* ============================================================
+       TOASTS / NOTIFICATIONS
+    ============================================================ */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      font-size: 0.82rem;
+      box-shadow: var(--shadow);
+      animation: slideIn .25s ease;
+      max-width: 320px;
+    }
+
+    .toast.success { border-left-color: #20c060; }
+    .toast.error   { border-left-color: var(--accent); }
+    .toast.info    { border-left-color: var(--moyen); }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to   { transform: translateX(0);   opacity: 1; }
+    }
+
+    /* ============================================================
+       FOOTER
+    ============================================================ */
+    footer {
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      text-align: center;
+      padding: 10px;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+    }
+
+    /* ============================================================
+       SPINNER
+    ============================================================ */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ================================================================
+     HEADER
+================================================================ -->
+<header>
+  <div class="header-brand">
+    <h1>&#128312; <span>Eagle</span> Wi-Fi Audit</h1>
+    <p>Réseaux Eagle Inc. — Alain Daigle, CWNE #332 — Reconnaissance passive</p>
+  </div>
+
+  <div class="header-status">
+    <div class="status-badge" id="wlanpi-badge">
+      <span class="status-dot disconnected" id="status-dot"></span>
+      <span id="status-text">WLANPi déconnecté</span>
+    </div>
+    <div class="status-badge" id="last-scan-badge" style="display:none">
+      <span id="last-scan-text" style="color:var(--text-dim)">—</span>
+    </div>
+  </div>
+
+  <div class="header-controls">
+    <button class="btn btn-secondary btn-sm" id="btn-export-csv" onclick="exportCSV()">
+      &#8659; CSV
+    </button>
+    <button class="btn btn-secondary btn-sm" onclick="triggerRefresh()" id="btn-refresh">
+      &#8635; Rafraîchir
+    </button>
+    <button class="btn btn-secondary btn-sm" onclick="openSelectionModal()" id="btn-select">
+      &#9881; Sélectionner les réseaux
+    </button>
+    <button class="btn btn-secondary btn-sm" id="btn-toggle-neighbors" onclick="toggleNeighbors()" style="display:none">
+      &#128065; Voisins
+    </button>
+    <button class="btn btn-primary btn-sm" onclick="openReportModal()">
+      &#128196; Rapport Word
+    </button>
+  </div>
+</header>
+
+<!-- ================================================================
+     MAIN
+================================================================ -->
+<main>
+
+  <!-- CARDS DE SYNTHÈSE -->
+  <div class="summary-cards">
+    <div class="risk-card" data-level="CRITIQUE" onclick="toggleFilter('CRITIQUE')">
+      <div class="card-count" id="count-CRITIQUE">0</div>
+      <div class="card-label">Critique</div>
+      <div class="card-hint">Open / WEP</div>
+    </div>
+    <div class="risk-card" data-level="ÉLEVÉ" onclick="toggleFilter('ÉLEVÉ')">
+      <div class="card-count" id="count-ÉLEVÉ">0</div>
+      <div class="card-label">Élevé</div>
+      <div class="card-hint">WPA1 / TKIP</div>
+    </div>
+    <div class="risk-card" data-level="MOYEN" onclick="toggleFilter('MOYEN')">
+      <div class="card-count" id="count-MOYEN">0</div>
+      <div class="card-label">Moyen</div>
+      <div class="card-hint">WPA2-Personnel</div>
+    </div>
+    <div class="risk-card" data-level="BON" onclick="toggleFilter('BON')">
+      <div class="card-count" id="count-BON">0</div>
+      <div class="card-label">Bon</div>
+      <div class="card-hint">WPA2-Ent. / OWE</div>
+    </div>
+    <div class="risk-card" data-level="EXCELLENT" onclick="toggleFilter('EXCELLENT')">
+      <div class="card-count" id="count-EXCELLENT">0</div>
+      <div class="card-label">Excellent</div>
+      <div class="card-hint">WPA3</div>
+    </div>
+  </div>
+
+  <!-- TOOLBAR DU TABLEAU -->
+  <div class="table-toolbar">
+    <span class="table-title">
+      Réseaux observés &nbsp;<span id="ap-count-label" style="color:var(--text-dim);font-size:0.78rem;"></span>
+    </span>
+    <div class="table-actions">
+      <span class="filter-chip active" id="chip-all" onclick="clearFilter()">Tous</span>
+    </div>
+  </div>
+
+  <!-- TABLEAU DES APs -->
+  <div class="table-wrapper">
+    <table id="ap-table">
+      <thead>
+        <tr>
+          <th onclick="sortBy('risk')"    data-col="risk">RISQUE</th>
+          <th onclick="sortBy('ssid')"    data-col="ssid">SSID</th>
+          <th onclick="sortBy('auth')"    data-col="auth">SÉCURITÉ</th>
+          <th onclick="sortBy('pmf')"     data-col="pmf">PMF</th>
+          <th data-col="wps">WPS</th>
+          <th onclick="sortBy('channel')" data-col="channel">CAN.</th>
+          <th onclick="sortBy('band')"    data-col="band">BANDE</th>
+          <th onclick="sortBy('rssi')"    data-col="rssi">RSSI</th>
+          <th onclick="sortBy('vendor')"  data-col="vendor">VENDOR</th>
+          <th data-col="constat">CONSTAT</th>
+        </tr>
+      </thead>
+      <tbody id="ap-tbody">
+        <tr>
+          <td colspan="10">
+            <div class="empty-state">
+              <div class="big-icon">📡</div>
+              <p>En attente de connexion au WLANPi…</p>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<!-- ================================================================
+     MODAL RAPPORT
+================================================================ -->
+<div class="modal-overlay" id="modal-selection">
+  <div class="modal" style="max-width:520px">
+    <h2>&#128268; Réseaux à auditer</h2>
+    <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:1rem">
+      Cochez les SSIDs qui appartiennent au client. Les réseaux non sélectionnés seront marqués comme voisins et exclus du rapport.
+    </p>
+    <div id="ssid-checklist" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:0.5rem;margin-bottom:0.75rem"></div>
+    <div style="display:flex;gap:0.5rem;margin-bottom:1rem">
+      <button class="btn btn-secondary btn-sm" onclick="selectAllSsids(true)">Tout cocher</button>
+      <button class="btn btn-secondary btn-sm" onclick="selectAllSsids(false)">Tout décocher</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeSelectionModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveSelection()">&#10003; Valider</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-report">
+  <div class="modal">
+    <h2>&#128196; Générer le rapport Word</h2>
+
+    <div class="form-group">
+      <label>Client *</label>
+      <input type="text" id="rpt-client" placeholder="Ex: Entreprise ABC Inc." />
+    </div>
+    <div class="form-group">
+      <label>Site / adresse *</label>
+      <input type="text" id="rpt-site" placeholder="Ex: 123 rue Principale, Montréal" />
+    </div>
+    <div class="form-group">
+      <label>Date de l'audit</label>
+      <input type="date" id="rpt-date" />
+    </div>
+    <div class="form-group">
+      <label>Mandat / réf.</label>
+      <input type="text" id="rpt-mandat" placeholder="Ex: 2026-001" />
+    </div>
+    <div class="form-group">
+      <label>Auditeur</label>
+      <input type="text" id="rpt-auditeur" placeholder="Ex: Jean Tremblay, CWNE #123" />
+    </div>
+    <div class="form-group">
+      <label>Durée (minutes)</label>
+      <input type="number" id="rpt-duration" value="60" min="5" max="480" />
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeReportModal()">Annuler</button>
+      <button class="btn btn-primary" id="btn-gen-report" onclick="generateReport()">
+        &#128196; Générer .docx
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ================================================================
+     FOOTER
+================================================================ -->
+<footer>
+  Réseaux Eagle Inc. — Eagle Wi-Fi Audit v1.0 &nbsp;|&nbsp; Alain Daigle, CWNE #332
+</footer>
+
+<!-- ================================================================
+     JAVASCRIPT
+================================================================ -->
+<script>
+(function () {
+  'use strict';
+
+  // ----------------------------------------------------------------
+  // État applicatif
+  // ----------------------------------------------------------------
+  const RISK_ORDER = ['CRITIQUE', 'ÉLEVÉ', 'MOYEN', 'BON', 'EXCELLENT'];
+
+  let allNetworks   = [];   // données complètes du dernier /api/scan
+  let filterLevel   = null; // null = tous
+  let sortCol       = 'risk';
+  let sortAsc       = true;
+  let pollTimer     = null;
+  let showNeighbors = false;
+
+  // SSIDs sélectionnés comme "mes réseaux" — persisté dans localStorage
+  let selectedSsids = new Set(
+    JSON.parse(localStorage.getItem('eagle_selected_ssids') || '[]')
+  );
+
+  // ----------------------------------------------------------------
+  // POLLING
+  // ----------------------------------------------------------------
+  function startPolling() {
+    fetchScan();
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(fetchScan, 30000);
+  }
+
+  async function fetchScan() {
+    try {
+      const resp = await fetch('/api/scan');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      allNetworks = data.networks || [];
+      updateStatus(data.status || {});
+      updateCards();
+      renderTable(allNetworks, filterLevel);
+    } catch (e) {
+      console.error('fetchScan error:', e);
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // STATUT WLANPI
+  // ----------------------------------------------------------------
+  function updateStatus(status) {
+    const dot       = document.getElementById('status-dot');
+    const text      = document.getElementById('status-text');
+    const lastBadge = document.getElementById('last-scan-badge');
+    const lastText  = document.getElementById('last-scan-text');
+
+    if (status.connected) {
+      dot.className  = 'status-dot connected';
+      text.textContent = `WLANPi ${status.host || ''} — ${status.ap_count || 0} AP`;
+    } else {
+      dot.className  = 'status-dot disconnected';
+      text.textContent = `WLANPi déconnecté (${status.host || ''})`;
+    }
+
+    if (status.last_scan) {
+      lastBadge.style.display = '';
+      lastText.textContent    = `Dernier scan : ${status.last_scan}`;
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // CARDS DE SYNTHÈSE
+  // ----------------------------------------------------------------
+  function myNetworks() {
+    if (selectedSsids.size === 0) return allNetworks;
+    return allNetworks.filter(n => selectedSsids.has(n.ssid || ''));
+  }
+
+  function neighborNetworks() {
+    if (selectedSsids.size === 0) return [];
+    return allNetworks.filter(n => !selectedSsids.has(n.ssid || ''));
+  }
+
+  function updateCards() {
+    const counts = {};
+    RISK_ORDER.forEach(r => counts[r] = 0);
+    myNetworks().forEach(n => {
+      if (counts[n.risk] !== undefined) counts[n.risk]++;
+    });
+    RISK_ORDER.forEach(r => {
+      const el = document.getElementById('count-' + r);
+      if (el) el.textContent = counts[r];
+    });
+    const mine = myNetworks();
+    document.getElementById('ap-count-label').textContent =
+      mine.length > 0 ? `(${mine.length} AP)` : '';
+    // Bouton voisins
+    const btnN = document.getElementById('btn-toggle-neighbors');
+    const nb = neighborNetworks().length;
+    btnN.style.display = nb > 0 ? '' : 'none';
+    btnN.textContent = showNeighbors
+      ? `\u{1F441} Masquer voisins (${nb})`
+      : `\u{1F441} Voisins (${nb})`;
+  }
+
+  // ----------------------------------------------------------------
+  // FILTRE PAR LEVEL
+  // ----------------------------------------------------------------
+  function toggleFilter(level) {
+    if (filterLevel === level) {
+      filterLevel = null;
+    } else {
+      filterLevel = level;
+    }
+    updateCardActive();
+    renderTable(allNetworks, filterLevel);
+  }
+
+  function clearFilter() {
+    filterLevel = null;
+    updateCardActive();
+    renderTable(allNetworks, null);
+  }
+
+  function updateCardActive() {
+    document.querySelectorAll('.risk-card').forEach(c => {
+      c.classList.toggle('active', c.dataset.level === filterLevel);
+    });
+    document.getElementById('chip-all').classList.toggle('active', filterLevel === null);
+  }
+
+  // ----------------------------------------------------------------
+  // TRI
+  // ----------------------------------------------------------------
+  function sortBy(col) {
+    if (sortCol === col) {
+      sortAsc = !sortAsc;
+    } else {
+      sortCol = col;
+      sortAsc = true;
+    }
+    // Mise à jour des indicateurs de tri dans le header
+    document.querySelectorAll('thead th').forEach(th => {
+      th.classList.remove('sorted-asc', 'sorted-desc');
+      if (th.dataset.col === col) {
+        th.classList.add(sortAsc ? 'sorted-asc' : 'sorted-desc');
+      }
+    });
+    renderTable(allNetworks, filterLevel);
+  }
+
+  function getSortValue(ap, col) {
+    switch (col) {
+      case 'risk':    return RISK_ORDER.indexOf(ap.risk);
+      case 'rssi':    return ap.rssi || -120;
+      case 'channel': return ap.channel || 0;
+      default:        return (ap[col] || '').toString().toLowerCase();
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // RENDER TABLE
+  // ----------------------------------------------------------------
+  function sortedRows(nets) {
+    return [...nets].sort((a, b) => {
+      const va = getSortValue(a, sortCol);
+      const vb = getSortValue(b, sortCol);
+      if (va < vb) return sortAsc ? -1 : 1;
+      if (va > vb) return sortAsc ?  1 : -1;
+      return 0;
+    });
+  }
+
+  function renderTable(networks, filterLvl) {
+    const tbody = document.getElementById('ap-tbody');
+
+    // Réseaux "mes réseaux" filtrés par niveau de risque
+    let mine = myNetworks();
+    if (filterLvl) mine = mine.filter(n => n.risk === filterLvl);
+    mine = sortedRows(mine);
+
+    // Réseaux voisins (pas filtrés par niveau)
+    const neighbors = showNeighbors ? sortedRows(neighborNetworks()) : [];
+
+    if (mine.length === 0 && neighbors.length === 0) {
+      tbody.innerHTML = `
+        <tr><td colspan="10">
+          <div class="empty-state">
+            <div class="big-icon">📡</div>
+            <p>${
+              allNetworks.length === 0
+                ? 'Aucun réseau scanné. Vérifiez la connexion WLANPi.'
+                : selectedSsids.size === 0
+                  ? 'Cliquez sur "Sélectionner les réseaux" pour choisir les SSIDs à auditer.'
+                  : 'Aucun réseau pour ce niveau de risque.'
+            }</p>
+          </div>
+        </td></tr>`;
+      return;
+    }
+
+    let rows = mine.map(ap => buildRow(ap, false));
+
+    if (neighbors.length > 0) {
+      rows.push(`<tr><td colspan="10" style="background:rgba(255,255,255,0.03);color:var(--text-dim);font-size:0.78rem;padding:6px 12px;border-top:1px dashed var(--border)">
+        &#128065; Réseaux voisins (${neighbors.length}) — exclus du rapport
+      </td></tr>`);
+      rows = rows.concat(neighbors.map(ap => buildRow(ap, true)));
+    }
+
+    tbody.innerHTML = rows.join('');
+  }
+
+  function buildRow(ap, isNeighbor = false) {
+    const risk    = ap.risk || '?';
+    const ssid    = ap.ssid || '';
+    const bssid   = ap.bssid || '';
+    const auth    = ap.auth || '';
+    const cipher  = ap.cipher || '';
+    const pmf     = ap.pmf || 'Disabled';
+    const wps     = ap.wps || false;
+    const channel = ap.channel || '?';
+    const band    = ap.band || '';
+    const rssi    = ap.rssi != null ? ap.rssi : '';
+    const vendor  = ap.vendor || '—';
+    const constat = ap.constat || '';
+
+    // SSID display
+    const ssidDisplay  = ssid || '[hidden]';
+    const ssidClass    = ssid ? 'td-ssid' : 'td-ssid hidden-ssid';
+
+    // Sécurité
+    const secStr = cipher && cipher !== 'None' ? `${auth} / ${cipher}` : auth;
+
+    // PMF badge
+    let pmfBadge = '';
+    if (pmf === 'Required') {
+      pmfBadge = '<span class="badge badge-pmf-r">Requis</span>';
+    } else if (pmf === 'Optional') {
+      pmfBadge = '<span class="badge badge-pmf-o">Optionnel</span>';
+    } else {
+      pmfBadge = '<span class="badge badge-pmf-d">Désactivé</span>';
+    }
+
+    // WPS badge
+    const wpsBadge = wps ? '<span class="badge badge-wps">WPS</span>' : '—';
+
+    // RSSI color
+    let rssiClass = 'td-rssi';
+    if (rssi >= -60)       rssiClass += ' rssi-good';
+    else if (rssi >= -70)  rssiClass += ' rssi-ok';
+    else if (rssi >= -80)  rssiClass += ' rssi-medium';
+    else if (rssi >= -90)  rssiClass += ' rssi-low';
+    else                   rssiClass += ' rssi-very-low';
+
+    const rssiStr = rssi !== '' ? `${rssi} dBm` : '—';
+
+    const rowStyle = isNeighbor ? 'opacity:0.45;font-style:italic' : '';
+    return `
+    <tr style="${rowStyle}">
+      <td><span class="td-risk risk-${risk.replace('É', 'É')}">${escHtml(risk)}</span></td>
+      <td class="${ssidClass}" title="${escHtml(bssid)}">${escHtml(ssidDisplay)}</td>
+      <td class="td-auth">${escHtml(secStr)}</td>
+      <td>${pmfBadge}</td>
+      <td>${wpsBadge}</td>
+      <td style="text-align:center">${escHtml(String(channel))}</td>
+      <td style="white-space:nowrap">${escHtml(band)}</td>
+      <td class="${rssiClass}">${escHtml(rssiStr)}</td>
+      <td class="td-vendor">${escHtml(vendor)}</td>
+      <td class="td-constat">${escHtml(constat)}</td>
+    </tr>`;
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ----------------------------------------------------------------
+  // REFRESH MANUEL
+  // ----------------------------------------------------------------
+  async function triggerRefresh() {
+    const btn = document.getElementById('btn-refresh');
+    btn.innerHTML = '<span class="spinner"></span> Scan…';
+    btn.disabled = true;
+    try {
+      const resp = await fetch('/api/refresh', { method: 'POST' });
+      const data = await resp.json();
+      if (data.ok) {
+        toast('Scan en cours…', 'info');
+        setTimeout(fetchScan, 3000);
+      } else {
+        toast(data.error || 'WLANPi non connecté', 'error');
+      }
+    } catch (e) {
+      toast('Erreur de connexion', 'error');
+    } finally {
+      btn.innerHTML = '&#8635; Rafraîchir';
+      btn.disabled = false;
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // EXPORT CSV
+  // ----------------------------------------------------------------
+  function exportCSV() {
+    if (selectedSsids.size > 0) {
+      const params = [...selectedSsids].map(s => 'ssid=' + encodeURIComponent(s)).join('&');
+      window.location.href = '/api/export/csv?' + params;
+    } else {
+      window.location.href = '/api/export/csv';
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // MODAL RAPPORT
+  // ----------------------------------------------------------------
+  function openReportModal() {
+    // Date par défaut = aujourd'hui
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById('rpt-date').value = today;
+    document.getElementById('modal-report').classList.add('visible');
+  }
+
+  function closeReportModal() {
+    document.getElementById('modal-report').classList.remove('visible');
+  }
+
+  async function generateReport() {
+    const client   = document.getElementById('rpt-client').value.trim();
+    const site     = document.getElementById('rpt-site').value.trim();
+    const date     = document.getElementById('rpt-date').value;
+    const mandat   = document.getElementById('rpt-mandat').value.trim();
+    const auditeur = document.getElementById('rpt-auditeur').value.trim();
+    const duration = parseInt(document.getElementById('rpt-duration').value, 10) || 60;
+
+    if (!client || !site) {
+      toast('Client et site sont obligatoires.', 'error');
+      return;
+    }
+
+    if (allNetworks.length === 0) {
+      toast('Aucun réseau scanné — effectuez un scan d\'abord.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btn-gen-report');
+    btn.innerHTML = '<span class="spinner"></span> Génération…';
+    btn.disabled  = true;
+
+    try {
+      const payload = { client, site, date, mandat, auditeur, duration_min: duration };
+      if (selectedSsids.size > 0) payload.selected_ssids = [...selectedSsids];
+      const resp = await fetch('/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Erreur serveur' }));
+        toast(err.error || 'Erreur génération rapport', 'error');
+        return;
+      }
+
+      // Déclencher le téléchargement
+      const blob = await resp.blob();
+      const disposition = resp.headers.get('Content-Disposition') || '';
+      const fnMatch = disposition.match(/filename="?([^";]+)"?/);
+      const filename = fnMatch ? fnMatch[1] : 'Eagle_WiFi_Audit.docx';
+
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
+      a.href     = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast('Rapport généré avec succès !', 'success');
+      closeReportModal();
+    } catch (e) {
+      toast('Erreur lors de la génération du rapport.', 'error');
+    } finally {
+      btn.innerHTML = '&#128196; Générer .docx';
+      btn.disabled  = false;
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // TOGGLE VOISINS
+  // ----------------------------------------------------------------
+  function toggleNeighbors() {
+    showNeighbors = !showNeighbors;
+    updateCards();
+    renderTable(allNetworks, filterLevel);
+  }
+
+  // ----------------------------------------------------------------
+  // MODALE SÉLECTION SSIDs
+  // ----------------------------------------------------------------
+  function openSelectionModal() {
+    if (allNetworks.length === 0) {
+      toast('Aucun réseau scanné — effectuez un scan d\'abord.', 'error');
+      return;
+    }
+    // Regrouper les SSIDs uniques avec stats
+    const ssidMap = {};
+    allNetworks.forEach(n => {
+      const key = n.ssid || '';
+      if (!ssidMap[key]) ssidMap[key] = { ssid: key, count: 0, auth: n.auth, bands: new Set() };
+      ssidMap[key].count++;
+      ssidMap[key].bands.add(n.band);
+    });
+    const ssids = Object.values(ssidMap).sort((a, b) => a.ssid.localeCompare(b.ssid));
+
+    const list = document.getElementById('ssid-checklist');
+    list.innerHTML = ssids.map(s => {
+      const checked = selectedSsids.has(s.ssid) ? 'checked' : '';
+      const label = s.ssid ? escHtml(s.ssid) : '<em>[hidden / non diffusé]</em>';
+      const bands = [...s.bands].join(', ');
+      return `
+        <label style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem;border-radius:4px;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background=''">
+          <input type="checkbox" value="${escHtml(s.ssid)}" ${checked} style="width:16px;height:16px;cursor:pointer">
+          <span style="flex:1">
+            <strong>${label}</strong>
+            <span style="color:var(--text-dim);font-size:0.8rem;margin-left:0.5rem">${s.count} AP · ${escHtml(s.auth)} · ${escHtml(bands)}</span>
+          </span>
+        </label>`;
+    }).join('');
+
+    document.getElementById('modal-selection').classList.add('visible');
+  }
+
+  function closeSelectionModal() {
+    document.getElementById('modal-selection').classList.remove('visible');
+  }
+
+  function selectAllSsids(state) {
+    document.querySelectorAll('#ssid-checklist input[type=checkbox]').forEach(cb => {
+      cb.checked = state;
+    });
+  }
+
+  function saveSelection() {
+    const checked = [];
+    document.querySelectorAll('#ssid-checklist input[type=checkbox]:checked').forEach(cb => {
+      checked.push(cb.value);
+    });
+    selectedSsids = new Set(checked);
+    localStorage.setItem('eagle_selected_ssids', JSON.stringify(checked));
+    closeSelectionModal();
+    updateCards();
+    renderTable(allNetworks, filterLevel);
+    const n = selectedSsids.size;
+    toast(n > 0 ? `${n} SSID(s) sélectionné(s) pour l'audit.` : 'Sélection effacée — tous les réseaux affichés.', 'success');
+  }
+
+  // ----------------------------------------------------------------
+  // TOASTS
+  // ----------------------------------------------------------------
+  function toast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = message;
+    container.appendChild(el);
+    setTimeout(() => {
+      el.style.opacity = '0';
+      el.style.transition = 'opacity .4s';
+      setTimeout(() => el.remove(), 450);
+    }, 3500);
+  }
+
+  // ----------------------------------------------------------------
+  // Fermer modal en cliquant dehors
+  // ----------------------------------------------------------------
+  document.getElementById('modal-report').addEventListener('click', function(e) {
+    if (e.target === this) closeReportModal();
+  });
+  document.getElementById('modal-selection').addEventListener('click', function(e) {
+    if (e.target === this) closeSelectionModal();
+  });
+
+  // ----------------------------------------------------------------
+  // Exposer les fonctions globalement (pour les onclick inline)
+  // ----------------------------------------------------------------
+  window.toggleFilter       = toggleFilter;
+  window.clearFilter        = clearFilter;
+  window.sortBy             = sortBy;
+  window.triggerRefresh     = triggerRefresh;
+  window.exportCSV          = exportCSV;
+  window.openReportModal    = openReportModal;
+  window.closeReportModal   = closeReportModal;
+  window.generateReport     = generateReport;
+  window.openSelectionModal = openSelectionModal;
+  window.closeSelectionModal= closeSelectionModal;
+  window.selectAllSsids     = selectAllSsids;
+  window.saveSelection      = saveSelection;
+  window.toggleNeighbors    = toggleNeighbors;
+
+  // ----------------------------------------------------------------
+  // INIT
+  // ----------------------------------------------------------------
+  startPolling();
+
+})();
+</script>
+</body>
+</html>
