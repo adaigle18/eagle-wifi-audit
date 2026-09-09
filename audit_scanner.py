@@ -232,6 +232,7 @@ class WLANPiScanner:
                 '    -e wlan.rsn.capabilities -e wlan.wfa.ie.wpa.version \\',
                 '    -e wlan.wfa.ie.wpa.mcs -e wlan.wfa.ie.wpa.ucs.list \\',
                 '    -e wlan.wfa.ie.wpa.akms.list -e wlan.wps.version \\',
+                '    -e wlan.fixed.capabilities.privacy \\',
                 '    -e wlan_radio.signal_dbm 2>/dev/null',
                 'kill $HOPPID 2>/dev/null',
                 f'sudo -n ip link set {managed_iface} up 2>/dev/null' if managed_iface else 'true',
@@ -320,30 +321,31 @@ class WLANPiScanner:
         Parse la sortie tshark -T fields.
         Colonnes : sa, ssid, channel, freq, rsn.version, rsn.pcs, rsn.akms,
                    rsn.caps, wpa.version, wpa.mcs, wpa.ucs, wpa.akms,
-                   wps.version, signal_dbm
+                   wps.version, capabilities.privacy, signal_dbm
         """
         aps = []
         for line in output.splitlines():
             if not line.strip():
                 continue
             parts = line.split('\t')
-            if len(parts) < 14:
-                parts += [''] * (14 - len(parts))
+            if len(parts) < 15:
+                parts += [''] * (15 - len(parts))
 
-            bssid    = parts[0].strip().upper()
-            ssid_raw = parts[1].strip()
-            ch_str   = parts[2].strip()
-            freq_str = parts[3].strip()
-            rsn_ver  = parts[4].strip()
-            rsn_pcs  = parts[5].strip()   # pairwise cipher suite
-            rsn_akms = parts[6].strip()   # auth key mgmt suite
-            rsn_caps = parts[7].strip()   # RSN capabilities
-            wpa_ver  = parts[8].strip()
-            wpa_mcs  = parts[9].strip()
-            wpa_ucs  = parts[10].strip()
-            wpa_akms = parts[11].strip()
-            wps_ver  = parts[12].strip()
-            sig_str  = parts[13].strip()
+            bssid       = parts[0].strip().upper()
+            ssid_raw    = parts[1].strip()
+            ch_str      = parts[2].strip()
+            freq_str    = parts[3].strip()
+            rsn_ver     = parts[4].strip()
+            rsn_pcs     = parts[5].strip()   # pairwise cipher suite
+            rsn_akms    = parts[6].strip()   # auth key mgmt suite
+            rsn_caps    = parts[7].strip()   # RSN capabilities
+            wpa_ver     = parts[8].strip()
+            wpa_mcs     = parts[9].strip()
+            wpa_ucs     = parts[10].strip()
+            wpa_akms    = parts[11].strip()
+            wps_ver     = parts[12].strip()
+            privacy_str = parts[13].strip()  # bit Privacy des capabilities du beacon
+            sig_str     = parts[14].strip()
 
             if not bssid or len(bssid) < 17:
                 continue
@@ -375,6 +377,8 @@ class WLANPiScanner:
             has_rsn = bool(rsn_ver)
             has_wpa = bool(wpa_ver)
             wps     = bool(wps_ver)
+            # Bit Privacy des capabilities : présent sans RSN/WPA => WEP
+            has_privacy = privacy_str.strip() in ('1', 'True', 'true')
 
             # Auth / cipher
             rsn_akms_up = rsn_akms.upper()
@@ -394,7 +398,7 @@ class WLANPiScanner:
                 pass
 
             if not has_rsn and not has_wpa:
-                auth, cipher = 'Open', 'None'
+                auth, cipher = ('WEP', 'WEP') if has_privacy else ('Open', 'None')
             elif has_rsn:
                 # Cipher
                 if 'GCMP-256' in rsn_pcs_up or 'GCMP_256' in rsn_pcs_up:
@@ -419,7 +423,8 @@ class WLANPiScanner:
                 elif '802.1X' in rsn_akms_up or 'EAP' in rsn_akms_up:
                     auth = 'WPA3-Enterprise' if pmf == 'Required' else 'WPA2-Enterprise'
                 elif 'PSK' in rsn_akms_up:
-                    auth = 'WPA2-Personal' if not has_wpa else 'WPA2-Personal'
+                    # Mode mixte WPA1+WPA2-PSK : les clients WPA1/TKIP restent acceptés
+                    auth = 'WPA2-Personal (mode mixte WPA1)' if has_wpa else 'WPA2-Personal'
                 else:
                     auth = 'WPA2-Personal'
             else:
@@ -479,6 +484,7 @@ class WLANPiScanner:
                     '_rsn_cipher': '',
                     '_wpa_cipher': '',
                     '_rsn_pmf': '',
+                    '_has_privacy': False,
                 }
                 current_section = None
                 continue
@@ -507,6 +513,11 @@ class WLANPiScanner:
             m = re.match(r'signal:\s*(-?\d+(?:\.\d+)?)\s*dBm', stripped)
             if m:
                 current['rssi'] = int(float(m.group(1)))
+                continue
+
+            # Bit Privacy des capabilities (ligne "capability: ESS Privacy ..." en iw scan)
+            if stripped.startswith('capability:') and 'Privacy' in stripped:
+                current['_has_privacy'] = True
                 continue
 
             # Détection WPS
@@ -612,6 +623,7 @@ class WLANPiScanner:
         rsn_cipher = ap.pop('_rsn_cipher', '')
         wpa_cipher = ap.pop('_wpa_cipher', '')
         rsn_pmf = ap.pop('_rsn_pmf', '')
+        has_privacy = ap.pop('_has_privacy', False)
 
         rsn_auth_str = ' '.join(rsn_auth_list).upper()
         wpa_auth_str = ' '.join(wpa_auth_list).upper()
@@ -624,8 +636,12 @@ class WLANPiScanner:
 
         # Déterminer l'authentification
         if not has_rsn and not has_wpa:
-            ap['auth'] = 'Open'
-            ap['cipher'] = 'None'
+            if has_privacy:
+                ap['auth'] = 'WEP'
+                ap['cipher'] = 'WEP'
+            else:
+                ap['auth'] = 'Open'
+                ap['cipher'] = 'None'
         elif has_rsn:
             # WPA3 ?
             if 'SAE' in rsn_auth_str and 'IEEE 802.1X' in rsn_auth_str:
@@ -643,11 +659,8 @@ class WLANPiScanner:
                 else:
                     ap['auth'] = 'WPA2-Enterprise'
             elif 'PSK' in rsn_auth_str:
-                # WPA2-Personal ; si aussi has_wpa -> mixed mode mais on privilégie RSN
-                if has_wpa:
-                    ap['auth'] = 'WPA2-Personal'  # mixed WPA1+WPA2
-                else:
-                    ap['auth'] = 'WPA2-Personal'
+                # Mode mixte WPA1+WPA2-PSK : les clients WPA1/TKIP restent acceptés
+                ap['auth'] = 'WPA2-Personal (mode mixte WPA1)' if has_wpa else 'WPA2-Personal'
             else:
                 ap['auth'] = 'WPA2-Personal'
 
@@ -669,9 +682,6 @@ class WLANPiScanner:
             else:
                 ap['auth'] = 'WPA1-Personal'
             ap['cipher'] = wpa_cipher if wpa_cipher else 'TKIP'
-
-        # WEP detection : pas de RSN/WPA mais "Privacy" dans iw scan
-        # (On ne peut pas le détecter ici sans le flag Privacy ; on laisse Open)
 
     def _classify(self, ap: dict) -> dict:
         """
@@ -696,6 +706,10 @@ class WLANPiScanner:
                 constat = 'WPA1-Personnel obsolète — vulnérable aux attaques TKIP et de dictionnaire.'
             else:
                 constat = 'TKIP détecté — protocole obsolète, vulnérable aux attaques par rejeu.'
+
+        elif auth == 'WPA2-Personal (mode mixte WPA1)':
+            risk = 'ÉLEVÉ'
+            constat = 'Mode mixte WPA1/WPA2-Personnel — les clients WPA1/TKIP restent acceptés, exposant le réseau aux attaques TKIP malgré la présence de WPA2.'
 
         elif auth == 'WPA2-Personal':
             risk = 'MOYEN'
