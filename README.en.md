@@ -221,7 +221,7 @@ Parameters are at the top of `wifi_audit.py`:
 |---|---|---|
 | `WLANPI_HOST` | `169.254.42.1` | WLANPi IP address (USB link-local) |
 | `WLANPI_USER` | `wlanpi` | WLANPi SSH username |
-| `WLANPI_PASSWORD` | `Root1234` | SSH password (official WLANPi default) |
+| `WLANPI_PASSWORD` | `wlanpi` | SSH password (official WLANPi default) |
 | `WLANPI_IFACE` | `wlan1` | Wi-Fi interface on the WLANPi |
 | `REFRESH_INTERVAL` | `60` | Seconds between automatic scans |
 | `PROBE_INTERVAL` | `10` | Seconds between connection checks |
