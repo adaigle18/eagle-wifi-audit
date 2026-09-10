@@ -163,7 +163,7 @@ _DEMO_NETWORKS = [
         'auth': 'WPA2/WPA3-Personal', 'cipher': 'CCMP', 'pmf': 'Optional', 'wps': False,
         'vendor': 'Aruba',
         'risk': 'BON',
-        'constat': 'Mode de transition WPA2/WPA3 — les clients WPA3 obtiennent SAE; les clients WPA2 restent vulnérables aux attaques par dictionnaire hors-ligne.',
+        'constat': 'Mode de compatibilité WPA3 (RSN Override) — les clients WPA3 obtiennent SAE via RSN Override; les clients WPA2 restent vulnérables aux attaques par dictionnaire hors-ligne.',
         'wps_warning': False,
     },
     # BON — WPA2/WPA3-Enterprise (mode de transition)
