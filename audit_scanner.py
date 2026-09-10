@@ -179,88 +179,28 @@ class WLANPiScanner:
                    132, 136, 140, 144, 149, 153, 157, 161, 165]
     CHANNELS_6G = [1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45,
                    49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93]
-    DWELL_MS = 150   # ms par canal
+    DWELL_MS = 400   # ms par canal
 
     def run_scan(self) -> list[dict]:
         """
-        Scan passif en mode monitor (wlanpi0) avec channel hopping complet.
-        - Met wlan0 down le temps du scan (même phy, canal partagé)
-        - dumpcap -w stdout | tshark -r stdin (pipeline, sans pcap intermédiaire)
-        - Couvre 2,4 GHz + 5 GHz + 6 GHz
-        - Remet wlan0 up à la fin
+        Scan actif via `iw dev wlan0 scan` (interface managed).
+        Couvre 2,4 GHz + 5 GHz sans problème de channel hopping.
+        Parse la sortie iw pour extraire SSID, sécurité, canal, RSSI.
         """
         import time
 
         if not self.is_connected():
             raise RuntimeError('Non connecté au WLANPi')
 
-        monitor_iface = self._detect_monitor_iface()
-        managed_iface = self._detect_managed_iface()
+        managed_iface = self._detect_managed_iface() or 'wlan0'
 
-        all_channels = self.CHANNELS_2G + self.CHANNELS_5G
-        dwell = self.DWELL_MS / 1000.0
-        total_duration = int(len(all_channels) * dwell) + 6
+        _, stdout, _ = self._client.exec_command(
+            f'sudo /sbin/iw dev {managed_iface} scan 2>/dev/null',
+            timeout=30,
+        )
+        raw_output = stdout.read().decode('utf-8', errors='replace')
 
-        try:
-            # Écrire le script sur le WLANPi (évite les problèmes de quoting)
-            channels_str = ' '.join(str(c) for c in all_channels)
-            dwell_s = f'{self.DWELL_MS / 1000:.3f}'
-            script_lines = [
-                '#!/bin/bash',
-                '# Channel hopper en arrière-plan',
-                f'( for ch in {channels_str}; do',
-                f'  sudo -n /usr/sbin/iw dev {monitor_iface} set channel $ch 2>/dev/null',
-                f'  sleep {dwell_s}',
-                'done ) &',
-                'HOPPID=$!',
-                '# Pipeline capture → parse',
-                f'sudo -n /usr/bin/dumpcap -i {monitor_iface} -w - -q -a duration:{total_duration} 2>/dev/null \\',
-                '  | /usr/bin/tshark -r - -l \\',
-                "    -Y 'wlan.fc.type_subtype == 0x0008' \\",
-                '    -T fields \\',
-                '    -e wlan.sa -e wlan.ssid -e wlan_radio.channel -e wlan_radio.frequency \\',
-                '    -e wlan.rsn.version -e wlan.rsn.pcs.list -e wlan.rsn.akms.list \\',
-                '    -e wlan.rsn.capabilities -e wlan.wfa.ie.wpa.version \\',
-                '    -e wlan.wfa.ie.wpa.mcs -e wlan.wfa.ie.wpa.ucs.list \\',
-                '    -e wlan.wfa.ie.wpa.akms.list \\',
-                '    -e wlan.fixed.capabilities.privacy \\',
-                '    -e wlan_radio.signal_dbm 2>/dev/null',
-                'kill $HOPPID 2>/dev/null',
-            ]
-            script_content = '\n'.join(script_lines) + '\n'
-            script_path = '/tmp/eagle_monitor_scan.sh'
-
-            # Écriture du script via heredoc
-            write_cmd = f"cat > {script_path} << 'EAGLEEOF'\n{script_content}\nEAGLEEOF\nchmod +x {script_path}"
-            _, stdout_w, _ = self._client.exec_command(write_cmd, timeout=10)
-            stdout_w.read()
-
-            # Exécution
-            transport = self._client.get_transport()
-            pipe_chan = transport.open_session()
-            pipe_chan.exec_command(f'bash {script_path}')
-
-            # Lecture streaming
-            raw = b''
-            timeout_at = time.time() + total_duration + 20
-            while time.time() < timeout_at:
-                if pipe_chan.recv_ready():
-                    raw += pipe_chan.recv(65536)
-                elif pipe_chan.exit_status_ready():
-                    while pipe_chan.recv_ready():
-                        raw += pipe_chan.recv(65536)
-                    break
-                else:
-                    time.sleep(0.2)
-
-            output = raw.decode('utf-8', errors='replace')
-            pipe_chan.close()
-            self._client.exec_command(f'rm -f {script_path} 2>/dev/null')
-
-        finally:
-            pass
-
-        aps = self._parse_tshark_fields(output)
+        aps = self._parse_iw_scan(raw_output)
 
         # Dédupliquer par BSSID (garder le meilleur RSSI)
         all_aps: dict[str, dict] = {}
@@ -271,6 +211,201 @@ class WLANPiScanner:
 
         result = [self._classify(ap) for ap in all_aps.values()]
         return sorted(result, key=lambda x: RISK_ORDER.index(x['risk']))
+
+    def _parse_iw_scan(self, output: str) -> list[dict]:
+        """
+        Parse la sortie de `iw dev wlan0 scan`.
+        Extrait BSSID, SSID, fréquence, signal, RSN/WPA/WPS.
+        Retourne une liste de dicts bruts (sans classification).
+        """
+        aps = []
+        current: dict = {}
+
+        def _flush(ap: dict) -> None:
+            if ap.get('bssid'):
+                aps.append(ap)
+
+        for line in output.splitlines():
+            # Nouveau BSS
+            m = re.match(r'^BSS\s+([0-9a-fA-F:]{17})', line)
+            if m:
+                _flush(current)
+                current = {
+                    'bssid': m.group(1).upper(),
+                    'ssid': '',
+                    'freq': 0,
+                    'channel': 0,
+                    'band': '2,4 GHz',
+                    'rssi': -100,
+                    'has_rsn': False,
+                    'has_wpa': False,
+                    'wps': False,
+                    'rsn_akms': '',
+                    'rsn_pcs': '',
+                    'rsn_caps_val': 0,
+                    'wpa_akms': '',
+                    'wpa_ucs': '',
+                    'privacy': False,
+                }
+                continue
+
+            if not current:
+                continue
+
+            line_s = line.strip()
+
+            # Fréquence
+            m = re.match(r'freq:\s+([\d.]+)', line_s)
+            if m:
+                current['freq'] = int(float(m.group(1)))
+                current['channel'] = freq_to_channel(current['freq'])
+                current['band'] = freq_to_band(current['freq'])
+                continue
+
+            # Signal
+            m = re.match(r'signal:\s+([-\d.]+)', line_s)
+            if m:
+                current['rssi'] = int(float(m.group(1)))
+                continue
+
+            # SSID
+            m = re.match(r'SSID:\s*(.*)', line_s)
+            if m:
+                current['ssid'] = m.group(1).strip()
+                continue
+
+            # Privacy (capability)
+            if 'capability:' in line_s and 'Privacy' in line_s:
+                current['privacy'] = True
+                continue
+
+            # RSN
+            if line_s == 'RSN:':
+                current['has_rsn'] = True
+                continue
+            m = re.match(r'\* Authentication suites:\s*(.*)', line_s)
+            if m and current.get('has_rsn'):
+                current['rsn_akms'] = m.group(1).upper()
+                continue
+            m = re.match(r'\* Pairwise ciphers:\s*(.*)', line_s)
+            if m and current.get('has_rsn') and not current.get('rsn_pcs'):
+                current['rsn_pcs'] = m.group(1).upper()
+                continue
+            m = re.match(r'\* Capabilities:.*\((0x[0-9a-fA-F]+)\)', line_s)
+            if m and current.get('has_rsn'):
+                try:
+                    current['rsn_caps_val'] = int(m.group(1), 16)
+                except ValueError:
+                    pass
+                continue
+
+            # WPA (vendor IE)
+            if 'WPA:' in line_s or (line_s.startswith('* Version: 1') and not current.get('has_rsn')):
+                current['has_wpa'] = True
+                continue
+            if current.get('has_wpa') and not current.get('has_rsn'):
+                m = re.match(r'\* Authentication suites:\s*(.*)', line_s)
+                if m:
+                    current['wpa_akms'] = m.group(1).upper()
+                    continue
+                m = re.match(r'\* Unicast ciphers:\s*(.*)', line_s)
+                if m:
+                    current['wpa_ucs'] = m.group(1).upper()
+                    continue
+
+            # WPS
+            if 'Wi-Fi Protected Setup' in line_s or 'WPS:' in line_s:
+                current['wps'] = True
+                continue
+
+        _flush(current)
+
+        # Convertir vers le format attendu par _parse_tshark_fields → _classify
+        result = []
+        for ap in aps:
+            freq = ap['freq']
+            channel = ap['channel']
+            band = ap['band']
+            rssi = ap['rssi']
+            has_rsn = ap['has_rsn']
+            has_wpa = ap['has_wpa']
+            wps = ap['wps']
+            has_privacy = ap['privacy']
+            rsn_akms_up = ap['rsn_akms']
+            rsn_pcs_up = ap['rsn_pcs']
+            caps_val = ap['rsn_caps_val']
+            wpa_akms_up = ap['wpa_akms']
+            wpa_ucs_up = ap['wpa_ucs']
+
+            # PMF
+            pmf = 'Disabled'
+            if caps_val & 0x0040:
+                pmf = 'Required'
+            elif caps_val & 0x0080:
+                pmf = 'Optional'
+
+            # Auth / cipher
+            auth, cipher = self._classify_auth(
+                has_rsn, has_wpa, has_privacy, wps,
+                rsn_akms_up, rsn_pcs_up, wpa_akms_up, wpa_ucs_up, pmf,
+            )
+
+            result.append({
+                'bssid': ap['bssid'],
+                'ssid': ap['ssid'],
+                'freq': freq,
+                'channel': channel,
+                'band': band,
+                'rssi': rssi,
+                'has_rsn': has_rsn,
+                'has_wpa': has_wpa,
+                'wps': wps,
+                'pmf': pmf,
+                'auth': auth,
+                'cipher': cipher,
+            })
+        return result
+
+    def _classify_auth(
+        self,
+        has_rsn: bool, has_wpa: bool, has_privacy: bool, wps: bool,
+        rsn_akms_up: str, rsn_pcs_up: str,
+        wpa_akms_up: str, wpa_ucs_up: str,
+        pmf: str,
+    ) -> tuple[str, str]:
+        """Déduit auth et cipher depuis les flags RSN/WPA."""
+        if has_rsn:
+            if 'SAE' in rsn_akms_up and ('PSK' in rsn_akms_up or '802.1X' in rsn_akms_up):
+                is_enterprise = '802.1X' in rsn_akms_up or 'EAP' in rsn_akms_up
+                auth = 'WPA2/WPA3-Enterprise' if is_enterprise else 'WPA2/WPA3-Personal'
+            elif 'SAE' in rsn_akms_up:
+                auth = 'WPA3-SAE'
+            elif 'OWE' in rsn_akms_up:
+                auth = 'OWE'
+            elif '802.1X' in rsn_akms_up or 'EAP' in rsn_akms_up:
+                auth = 'WPA3-Enterprise' if pmf == 'Required' else 'WPA2-Enterprise'
+            elif 'PSK' in rsn_akms_up:
+                auth = 'WPA2-Personal'
+            else:
+                auth = 'WPA2-Personal'
+            cipher = 'CCMP' if 'CCMP' in rsn_pcs_up else ('TKIP' if 'TKIP' in rsn_pcs_up else 'CCMP')
+            if 'TKIP' in rsn_pcs_up and 'CCMP' not in rsn_pcs_up:
+                auth = auth.replace('WPA2', 'WPA1') if 'WPA2' in auth else auth
+        elif has_wpa:
+            if '802.1X' in wpa_akms_up or 'EAP' in wpa_akms_up:
+                auth = 'WPA1-Enterprise'
+            else:
+                auth = 'WPA1-Personal'
+            cipher = 'TKIP' if 'TKIP' in wpa_ucs_up else 'CCMP'
+            if 'TKIP' in wpa_ucs_up and 'CCMP' in wpa_ucs_up:
+                cipher = 'TKIP/CCMP'
+        elif has_privacy:
+            auth = 'WEP / WEP'
+            cipher = 'WEP'
+        else:
+            auth = 'Open'
+            cipher = 'None'
+        return auth, cipher
 
     def _detect_monitor_iface(self) -> str:
         """Retourne l'interface en mode monitor (wlanpi0 en priorité)."""

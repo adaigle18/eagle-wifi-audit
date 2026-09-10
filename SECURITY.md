@@ -30,15 +30,4 @@ L'utilisateur est seul responsable du respect des lois applicables dans sa jurid
 
 ---
 
-## Signalement de vulnérabilités
-
-Si vous découvrez une vulnérabilité de sécurité dans cette application, veuillez la signaler **de façon responsable** :
-
-1. **Ne pas** ouvrir une issue publique GitHub
-2. Envoyer un courriel à : **info@reseauxeagle.ca**
-3. Inclure : description de la vulnérabilité, étapes de reproduction, impact potentiel
-4. Un accusé de réception sera envoyé dans les 48 heures ouvrables
-
----
-
 © 2026 Réseaux Eagle Inc. — Alain Daigle, CWNE #332
