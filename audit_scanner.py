@@ -197,16 +197,9 @@ class WLANPiScanner:
         monitor_iface = self._detect_monitor_iface()
         managed_iface = self._detect_managed_iface()
 
-        all_channels = self.CHANNELS_2G + self.CHANNELS_5G + self.CHANNELS_6G
+        all_channels = self.CHANNELS_2G + self.CHANNELS_5G
         dwell = self.DWELL_MS / 1000.0
         total_duration = int(len(all_channels) * dwell) + 6
-
-        # 1. Mettre wlan0 down pour libérer le radio
-        if managed_iface:
-            self._client.exec_command(
-                f'sudo -n ip link set {managed_iface} down 2>/dev/null', timeout=5
-            )
-            time.sleep(0.5)
 
         try:
             # Écrire le script sur le WLANPi (évite les problèmes de quoting)
@@ -214,8 +207,6 @@ class WLANPiScanner:
             dwell_s = f'{self.DWELL_MS / 1000:.3f}'
             script_lines = [
                 '#!/bin/bash',
-                f'sudo -n ip link set {managed_iface} down 2>/dev/null' if managed_iface else 'true',
-                'sleep 0.3',
                 '# Channel hopper en arrière-plan',
                 f'( for ch in {channels_str}; do',
                 f'  sudo -n /usr/sbin/iw dev {monitor_iface} set channel $ch 2>/dev/null',
@@ -231,11 +222,10 @@ class WLANPiScanner:
                 '    -e wlan.rsn.version -e wlan.rsn.pcs.list -e wlan.rsn.akms.list \\',
                 '    -e wlan.rsn.capabilities -e wlan.wfa.ie.wpa.version \\',
                 '    -e wlan.wfa.ie.wpa.mcs -e wlan.wfa.ie.wpa.ucs.list \\',
-                '    -e wlan.wfa.ie.wpa.akms.list -e wlan.wps.version \\',
+                '    -e wlan.wfa.ie.wpa.akms.list \\',
                 '    -e wlan.fixed.capabilities.privacy \\',
                 '    -e wlan_radio.signal_dbm 2>/dev/null',
                 'kill $HOPPID 2>/dev/null',
-                f'sudo -n ip link set {managed_iface} up 2>/dev/null' if managed_iface else 'true',
             ]
             script_content = '\n'.join(script_lines) + '\n'
             script_path = '/tmp/eagle_monitor_scan.sh'
@@ -268,11 +258,7 @@ class WLANPiScanner:
             self._client.exec_command(f'rm -f {script_path} 2>/dev/null')
 
         finally:
-            # 5. Remettre wlan0 up dans tous les cas
-            if managed_iface:
-                self._client.exec_command(
-                    f'sudo -n ip link set {managed_iface} up 2>/dev/null', timeout=5
-                )
+            pass
 
         aps = self._parse_tshark_fields(output)
 
@@ -321,15 +307,15 @@ class WLANPiScanner:
         Parse la sortie tshark -T fields.
         Colonnes : sa, ssid, channel, freq, rsn.version, rsn.pcs, rsn.akms,
                    rsn.caps, wpa.version, wpa.mcs, wpa.ucs, wpa.akms,
-                   wps.version, capabilities.privacy, signal_dbm
+                   capabilities.privacy, signal_dbm
         """
         aps = []
         for line in output.splitlines():
             if not line.strip():
                 continue
             parts = line.split('\t')
-            if len(parts) < 15:
-                parts += [''] * (15 - len(parts))
+            if len(parts) < 14:
+                parts += [''] * (14 - len(parts))
 
             bssid       = parts[0].strip().upper()
             ssid_raw    = parts[1].strip()
@@ -343,9 +329,9 @@ class WLANPiScanner:
             wpa_mcs     = parts[9].strip()
             wpa_ucs     = parts[10].strip()
             wpa_akms    = parts[11].strip()
-            wps_ver     = parts[12].strip()
-            privacy_str = parts[13].strip()  # bit Privacy des capabilities du beacon
-            sig_str     = parts[14].strip()
+            wps_ver     = ''                 # non disponible dans tshark 3.4.x
+            privacy_str = parts[12].strip()  # bit Privacy des capabilities du beacon
+            sig_str     = parts[13].strip()
 
             if not bssid or len(bssid) < 17:
                 continue
