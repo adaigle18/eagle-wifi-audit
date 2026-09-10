@@ -725,7 +725,7 @@ class WLANPiScanner:
 
         elif auth == 'WPA2/WPA3-Personal':
             risk = 'BON'
-            constat = 'Mode de transition WPA2/WPA3 — les clients WPA3 obtiennent SAE; les clients WPA2 restent vulnérables aux attaques par dictionnaire hors-ligne.'
+            constat = 'Mode de compatibilité WPA3 (RSN Override) — les clients WPA3 obtiennent SAE via RSN Override; les clients WPA2 restent vulnérables aux attaques par dictionnaire hors-ligne.'
 
         elif auth == 'WPA2/WPA3-Enterprise':
             risk = 'BON'
