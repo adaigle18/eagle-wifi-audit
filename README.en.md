@@ -13,7 +13,7 @@ Developed by **Alain Daigle, CWNE #332** — [Réseaux Eagle Inc.](https://resea
 
 ## Interface
 
-![Eagle Wi-Fi Audit — Main interface](docs/screenshot.png)
+![Eagle Wi-Fi Audit — Main interface](docs/interface_demo.png)
 
 ---
 
