@@ -23,7 +23,7 @@ from report_generator import generate_report
 # ---------------------------------------------------------------------------
 WLANPI_HOST = '169.254.42.1'
 WLANPI_USER = 'wlanpi'
-WLANPI_PASSWORD = 'Root1234'
+WLANPI_PASSWORD = 'wlanpi'
 WLANPI_IFACE = 'wlanpi0'
 WLANPI_PORT = 22
 REFRESH_INTERVAL = 60   # secondes entre scans automatiques
